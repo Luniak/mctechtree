@@ -44,5 +44,15 @@ def solve *names
   Solver.new(solutions).solve.describe
 end
 
+def tree name
+  if name =~ /(.+?)\*(\d+)/
+    name, count = [$1, $2.to_i]
+  else
+    count = 1
+  end
+  ItemResolver.new(DB.find(name), count).resolve
+end
+
+
 solve 'molten redstone*1000'
 binding.pry

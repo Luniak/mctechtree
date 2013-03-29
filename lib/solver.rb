@@ -1,13 +1,19 @@
 require 'ostruct'
 
+class Counter < Hash
+  def initialize
+    super { |hash, key| hash[key] = 0 }
+  end
+end
 class Solver
-    attr_accessor :raw, :crafts, :craft_seq
+    attr_accessor :raw, :crafts, :craft_seq, :stash
 
     def initialize(solutions)
         @solutions = solutions
-        @crafts = Hash.new { |h, key| h[key] = 0 }
-        @craft_seq = Hash.new { |h, key| h[key] = 0 }
-        @raw = Hash.new { |h, key| h[key] = 0 }
+        @crafts = Counter.new
+        @craft_seq = Counter.new
+        @raw = Counter.new
+        @stash = Counter.new
     end
 
     def process solution, depth, multiplier = 1
@@ -17,20 +23,38 @@ class Solver
     end
 
     def get depth, mul, count, item
-        # puts "#{' '*depth}GET #{mul} #{count} #{item}"
-        @raw[item] += (mul * count)
+        puts "#{' '*depth}#{mul} GET #{count} #{item}"
+        raw[item] += (mul * count)
+    end
+
+    def inspect_stash
+      stash.map { |key, value| "#{key.result.name}=#{value}" if value > 0 }.compact.join(',')
     end
 
     def craft depth, mul, count, tree
-        # puts "#{' '*depth}CRAFT #{mul} #{count}"
         recipe, tail = tree
-        # puts "#{' '*depth}RECIPE #{recipe}"
-        @craft_seq[recipe] = [@craft_seq[recipe] || 0, depth].max
-        new_count = exact_craft(mul * count, recipe.makes)
-        # puts "#{' '*depth}NUM #{@crafts[recipe]} + #{count} or #{new_count}"
-        @crafts[recipe] += [count, new_count].max
-        tail.each do |num, rule|
+        puts "#{' '*depth}#{mul} CRAFT #{count} #{recipe.result.name}"
+        craft_seq[recipe] = [@craft_seq[recipe] || 0, depth].max
+        exact_count = exact_craft(mul * count, recipe.makes)
+        new_count = mul * count
+        if stash[recipe] >= new_count
+          puts "#{' '*depth}HAVE #{new_count}"
+          stash[recipe] -= new_count
+          puts "#{' '*depth}#{inspect_stash}"
+        else
+          # puts "#{' '*depth}NUM #{@crafts[recipe]} + #{new_count}"
+          stash_count = [exact_count, recipe.makes].max
+          # @crafts[recipe] += [count, new_count].max
+          crafts[recipe] += exact_count
+          puts "#{' '*depth}STASHING #{stash_count} * #{recipe.result.name}"
+          stash[recipe] += stash_count
+          tail.each do |num, rule|
             process rule, depth+1, new_count
+          end
+          unstash_count = [new_count, count].max
+          puts "#{' '*depth}UNSTASHING #{unstash_count} * #{recipe.result.name}"
+          stash[recipe] -= unstash_count
+          puts "#{' '*depth}#{inspect_stash}"
         end
     end
 
@@ -44,6 +68,7 @@ class Solver
     def describe
       show_raw
       show_crafts
+      show_stash
       nil
     end
 
@@ -91,6 +116,13 @@ class Solver
         ].join ''
         last_num = row.num
         puts msg
+      end
+    end
+
+    def show_stash
+      puts "Leftovers:"
+      stash.each do |recipe, count|
+        puts "#{recipe.result.name} * #{count}" if count != 0
       end
     end
 
